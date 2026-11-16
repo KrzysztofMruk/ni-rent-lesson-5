@@ -3,7 +3,7 @@
 import pytest
 
 from src.manager import Manager
-from src.models import Parameters
+from src.models import ApartmentSettlement, Parameters, TenantSettlement
 from src.models import Bill
 
 
@@ -63,3 +63,81 @@ def test_apartment_costs_reject_invalid_month():
 
     with pytest.raises(ValueError):
         manager.get_apartment_costs('apart-polanka', 2025, 13)
+
+
+def test_create_apartment_settlement():
+    manager = Manager(Parameters())
+
+    settlement_with_bills = manager.create_apartment_settlement(
+        'apart-polanka', 2025, 1
+    )
+    assert isinstance(settlement_with_bills, ApartmentSettlement)
+    assert settlement_with_bills.apartment == 'apart-polanka'
+    assert settlement_with_bills.year == 2025
+    assert settlement_with_bills.month == 1
+    assert settlement_with_bills.total_rent_pln == 0.0
+    assert settlement_with_bills.total_bills_pln == 910.0
+    assert settlement_with_bills.total_due_pln == -910.0
+
+    settlement_without_bills = manager.create_apartment_settlement(
+        'apart-polanka', 2025, 2
+    )
+    assert isinstance(settlement_without_bills, ApartmentSettlement)
+    assert settlement_without_bills.apartment == 'apart-polanka'
+    assert settlement_without_bills.year == 2025
+    assert settlement_without_bills.month == 2
+    assert settlement_without_bills.total_rent_pln == 0.0
+    assert settlement_without_bills.total_bills_pln == 0.0
+    assert settlement_without_bills.total_due_pln == 0.0
+
+
+def test_create_tenant_settlements_splits_apartment_bills():
+    manager = Manager(Parameters())
+    del manager.tenants['tenant-3']
+
+    settlements_for_two_tenants = manager.create_tenant_settlements(
+        'apart-polanka', 2025, 1
+    )
+    assert len(settlements_for_two_tenants) == 2
+    assert all(
+        isinstance(settlement, TenantSettlement)
+        for settlement in settlements_for_two_tenants
+    )
+    assert {settlement.tenant for settlement in settlements_for_two_tenants} == {
+        'Jan Nowak', 'Adam Kowalski'
+    }
+    assert all(
+        settlement.apartment_settlement == 'apart-polanka'
+        for settlement in settlements_for_two_tenants
+    )
+    assert all(settlement.year == 2025 for settlement in settlements_for_two_tenants)
+    assert all(settlement.month == 1 for settlement in settlements_for_two_tenants)
+    assert all(
+        settlement.rent_pln == 0.0
+        for settlement in settlements_for_two_tenants
+    )
+    assert all(
+        settlement.bills_pln == 455.0
+        for settlement in settlements_for_two_tenants
+    )
+    assert all(
+        settlement.total_due_pln == 455.0
+        for settlement in settlements_for_two_tenants
+    )
+    assert all(
+        settlement.balance_pln == -455.0
+        for settlement in settlements_for_two_tenants
+    )
+
+    manager.tenants.pop('tenant-2')
+    settlements_for_one_tenant = manager.create_tenant_settlements(
+        'apart-polanka', 2025, 1
+    )
+    assert len(settlements_for_one_tenant) == 1
+    assert settlements_for_one_tenant[0].tenant == 'Jan Nowak'
+    assert settlements_for_one_tenant[0].bills_pln == 910.0
+    assert settlements_for_one_tenant[0].total_due_pln == 910.0
+    assert settlements_for_one_tenant[0].balance_pln == -910.0
+
+    manager.tenants.pop('tenant-1')
+    assert manager.create_tenant_settlements('apart-polanka', 2025, 1) == []
