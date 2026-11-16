@@ -1,5 +1,7 @@
 
 
+import pytest
+
 from src.manager import Manager
 from src.models import Parameters
 from src.models import Bill
@@ -51,3 +53,13 @@ def test_apartment_costs_with_optional_parameters():
 
     costs = manager.get_apartment_costs('apart-polanka')
     assert costs == 3532.0
+
+
+def test_apartment_costs_reject_invalid_month():
+    manager = Manager(Parameters())
+
+    with pytest.raises(ValueError):
+        manager.get_apartment_costs('apart-polanka', 2025, 0)
+
+    with pytest.raises(ValueError):
+        manager.get_apartment_costs('apart-polanka', 2025, 13)
